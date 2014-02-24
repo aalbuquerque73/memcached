@@ -3,25 +3,63 @@
  */
 
 (function() {
+
+	function merge(object, data) {
+		_.each(data, function(item, key) {
+			console.log("[merge]", key);
+			if(typeof(item)=="object") {
+				if(this[key] && !this.hasOwnProperty(key)) {
+					console.log("Merging prototype");
+					var obj = this[key];
+					this[key] = Utils.type(item)=="array"?[]:{};
+					merge(this[key], obj);
+					//console.log(this.hasOwnProperty(key), this[key]);
+				}
+				if(!this.hasOwnProperty(key)) {
+					this[key] = Utils.type(item)=="array"?[]:{};
+				}
+				merge(this[key], item);
+				return;
+			}
+			this[key] = item;
+		}, object);
+	}
+	
 	var Memcached = require('memcached');
 
-	var config = {
-			hosts: "127.0.0.1:11211",
-			options: {}
-	};
-
-	console.log("[Startup]", config);
-
 	function Runtime(config) {
-		this.mc = new Memcached(config.hosts);
+		function $Super() {}
+		$Super.prototype = {};
+		merge($Super.prototype, this.callbacks);
+		
+		this.$super = new $Super();
+		merge(this, config);
+		this.mc = new Memcached(this.hosts);
 	}
 	Runtime.prototype = {
 			events: {
-				issue: function() {},
-				failure: function() {},
-				reconnecting: function() {},
-				reconnected: function() {},
-				remove: function() {}
+				issue: function() {console.log("[Memcached:issue]", arguments);},
+				failure: function() {console.log("[Memcached:failure]", arguments);},
+				reconnecting: function() {console.log("[Memcached:reconnecting]", arguments);},
+				reconnected: function() {console.log("[Memcached:reconnected]", arguments);},
+				remove: function() {console.log("[Memcached:remove]", arguments);}
+			},
+			callbacks: {
+				stats: function() {
+					console.log("[Memcached:stats]", arguments);
+				},
+				items: function() {
+					console.log("[Memcached:items]", arguments);
+				},
+				slabs: function() {
+					console.log("[Memcached:slabs]", arguments);
+				},
+				settings: function() {
+					console.log("[Memcached:settings]", arguments);
+				},
+				flush: function() {
+					console.log("[Memcached:flush]", arguments);
+				}
 			},
 
 			init: function() {
@@ -35,32 +73,37 @@
 			},
 
 			stats: function() {
+				var self = this;
 				this.mc.stats(function() {
-					console.log(arguments);
+					self.callbacks.stats.apply(self, arguments);
 				});
 			},
 
 			items: function() {
+				var self = this;
 				this.mc.items(function() {
-					console.log(arguments);
+					self.callbacks.items.apply(self, arguments);
 				});
 			},
 
 			slabs: function() {
+				var self = this;
 				this.mc.slabs(function() {
-					console.log(arguments);
+					self.callbacks.slabs.apply(self, arguments);
 				});
 			},
 
 			settings: function() {
+				var self = this;
 				this.mc.settings(function() {
-					console.log(arguments);
+					self.callbacks.settings.apply(self, arguments);
 				});
 			},
 
 			flush: function() {
+				var self = this;
 				this.mc.flush(function() {
-					console.log(arguments);
+					self.callbacks.flush.apply(self, arguments);
 				});
 			},
 
@@ -70,9 +113,14 @@
 	};
 
 	function ViewModel() {
-		this._data = {};
+		this._data = {
+				stats: [],
+				items: [],
+				slabs: [],
+				settings: []
+		};
 		if(localStorage.data) {
-			Utils.merge(
+			merge(
 					this._data,
 					JSON.parse(localStorage.data)
 			);
@@ -95,7 +143,32 @@
 		}
 		observable(this, this._data);
 
+		var self = this;
+		var config = {
+				hosts: "127.0.0.1:11211",
+				options: {},
+				callbacks: {
+					stats: function(ignore, stats) {
+						console.log("==============================");
+						this.$super.stats.apply(this, arguments);
+						_.each(stats, function(item){
+							this.push(item);
+						}, self);
+					}
+				}
+		};
+
+		console.log("[Startup]", config);
+
 		var mc = new Runtime(config);
+		mc.init();
+		
+		mc.stats();
+		mc.items();
+		mc.slabs();
+		mc.settings();
+		
+		mc.close();
 	}
 
 	$(function() {
