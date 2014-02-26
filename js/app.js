@@ -34,6 +34,18 @@
 				this.mc.connect();
 			},
 
+			display: function() {
+				this.mc.display(function() {
+					console.log(arguments);
+				});
+			},
+
+			dump: function() {
+				this.mc.dump(function() {
+					console.log(arguments);
+				});
+			},
+
 			stats: function() {
 				this.mc.stats(function() {
 					console.log(arguments);
